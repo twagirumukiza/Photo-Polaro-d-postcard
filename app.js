@@ -29,6 +29,7 @@ let images = [];           // HTMLImageElement[]
 let transforms = [];       // { offsetX, offsetY, rotation }[]
 let currentOrientation = "vertical";
 let currentBg = "#f5f0e8";
+let lastCollageSize = { width: 0, height: 0 }; // dimensions naturelles (CSS px) du dernier collage généré
 
 // ---------- Helpers ----------
 function getOrientation() {
@@ -171,6 +172,7 @@ function renderCollage() {
   canvas.style.display = "block";
   downloadBtn.disabled = false;
   embedBtn.disabled = false;
+  lastCollageSize = { width: totalW, height: totalH };
 }
 
 // ---------- Build adjusters UI ----------
@@ -364,9 +366,19 @@ resetBtn.addEventListener("click", () => {
 embedBtn.addEventListener("click", () => {
   if (!canvas.width) return;
 
+  // Largeur naturelle du collage (en CSS px) : sert de plafond pour éviter
+  // un agrandissement flou de l'image sur les grands écrans.
+  const naturalWidth = Math.round(lastCollageSize.width) || 640;
+  const naturalHeight = Math.round(lastCollageSize.height) || 640;
+  const ratio = (naturalWidth / naturalHeight).toFixed(4);
+
   const html = `<!-- Polaroid Postcard – by twagirumukiza -->
+<!-- Responsive : occupe le plus de place possible sans jamais dépasser
+     la résolution naturelle de l'image (évite le flou d'agrandissement). -->
 <figure class="polaroid-postcard" style="
-  max-width: 420px;
+  width: 100%;
+  max-width: min(92vw, ${naturalWidth}px);
+  aspect-ratio: ${ratio};
   margin: 2rem auto;
   text-align: center;
   font-family: system-ui, sans-serif;
@@ -374,12 +386,15 @@ embedBtn.addEventListener("click", () => {
   <img
     src="VOTRE-IMAGE.png"
     alt="Collage polaroid"
+    width="${naturalWidth}"
+    height="${naturalHeight}"
     style="
       width: 100%;
-      height: auto;
+      height: 100%;
+      display: block;
+      object-fit: contain;
       border-radius: 4px;
       box-shadow: 0 8px 30px rgba(0,0,0,0.12);
-      display: block;
     "
   />
   <figcaption style="
@@ -405,18 +420,47 @@ embedModal.addEventListener("click", (e) => {
   }
 });
 
-copyEmbedBtn.addEventListener("click", () => {
-  embedCode.select();
-  navigator.clipboard.writeText(embedCode.value).then(() => {
-    copyEmbedBtn.textContent = "Copié !";
-    setTimeout(() => {
-      copyEmbedBtn.textContent = "Copier le code";
-    }, 1800);
-  }).catch(() => {
-    document.execCommand("copy");
-    copyEmbedBtn.textContent = "Copié !";
-    setTimeout(() => {
-      copyEmbedBtn.textContent = "Copier le code";
-    }, 1800);
-  });
+async function copyEmbedCodeToClipboard() {
+  const text = embedCode.value;
+
+  // Sélection visible (utile sur mobile + fallback execCommand)
+  embedCode.focus();
+  embedCode.setSelectionRange(0, text.length);
+
+  // 1) API moderne, si disponible et autorisée
+  if (window.isSecureContext && navigator.clipboard && navigator.clipboard.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (err) {
+      console.warn("navigator.clipboard.writeText a échoué, tentative de repli :", err);
+    }
+  }
+
+  // 2) Repli pour Safari iOS / navigateurs restreints
+  try {
+    return document.execCommand("copy");
+  } catch (err) {
+    console.error("execCommand('copy') a échoué :", err);
+    return false;
+  }
+}
+
+copyEmbedBtn.addEventListener("click", async () => {
+  const originalLabel = "Copier le code";
+  let success = false;
+  try {
+    success = await copyEmbedCodeToClipboard();
+  } catch (err) {
+    console.error("Erreur inattendue lors de la copie :", err);
+    success = false;
+  }
+
+  copyEmbedBtn.textContent = success
+    ? "Copié !"
+    : "Copie impossible — sélectionnez et copiez (Cmd/Ctrl+C)";
+
+  setTimeout(() => {
+    copyEmbedBtn.textContent = originalLabel;
+  }, success ? 1800 : 3000);
 });
