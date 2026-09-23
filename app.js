@@ -340,6 +340,7 @@ resetBtn.addEventListener("click", () => {
   photoCountSelect.value = "3";
   document.querySelector('input[name="orientation"][value="vertical"]').checked = true;
   bgColorInput.value = "#f5f0e8";
+});
 
 // ---------- Embed / HTML code ----------
 const embedBtn = document.getElementById("embedBtn");
