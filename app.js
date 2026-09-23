@@ -190,11 +190,56 @@ generateBtn.addEventListener("click", () => {
 });
 
 downloadBtn.addEventListener("click", () => {
-  const link = document.createElement("a");
-  link.download = `polaroid-postcard-twagirumukiza-${Date.now()}.png`;
-  link.href = canvas.toDataURL("image/png");
-  link.click();
+  if (!canvas.width || !canvas.height) {
+    alert("Aucun collage à télécharger. Générez d'abord une image.");
+    return;
+  }
+
+  const filename = `polaroid-postcard-${Date.now()}.png`;
+
+  // Méthode 1 : toBlob (recommandée)
+  if (canvas.toBlob) {
+    canvas.toBlob(
+      (blob) => {
+        if (blob) {
+          const url = URL.createObjectURL(blob);
+          triggerDownload(url, filename);
+          setTimeout(() => URL.revokeObjectURL(url), 2000);
+          return;
+        }
+        // Fallback si blob null
+        fallbackDownload(filename);
+      },
+      "image/png",
+      1.0
+    );
+  } else {
+    fallbackDownload(filename);
+  }
 });
+
+function triggerDownload(url, filename) {
+  const link = document.createElement("a");
+  link.download = filename;
+  link.href = url;
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function fallbackDownload(filename) {
+  try {
+    const dataUrl = canvas.toDataURL("image/png");
+    triggerDownload(dataUrl, filename);
+  } catch (e) {
+    console.error(e);
+    alert(
+      "Le téléchargement automatique a échoué.\n\n" +
+      "Astuce : faites un clic droit (ou appui long) sur le collage → « Enregistrer l'image sous… »"
+    );
+  }
+}
 
 resetBtn.addEventListener("click", () => {
   photoInput.value = "";
