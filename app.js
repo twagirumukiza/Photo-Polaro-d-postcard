@@ -102,22 +102,20 @@ async function generateCollage() {
 
   // Calculate layout
   let totalW, totalH;
-  const gap = 40; // overlap / spacing
   const padding = 60;
-  const signatureSpace = 90;
 
   if (orientation === "vertical") {
     // Stacked vertically with slight overlap
     const frameH = photoH + 18 + 52;
     const overlap = 70;
     totalW = photoW + 36 + padding * 2 + 40;
-    totalH = frameH + (images.length - 1) * (frameH - overlap) + padding * 2 + signatureSpace;
+    totalH = frameH + (images.length - 1) * (frameH - overlap) + padding * 2;
   } else {
     // Horizontal
     const frameW = photoW + 36;
     const overlap = 50;
     totalW = frameW + (images.length - 1) * (frameW - overlap) + padding * 2;
-    totalH = photoH + 18 + 52 + padding * 2 + signatureSpace;
+    totalH = photoH + 18 + 52 + padding * 2;
   }
 
   // High-DPI for crisp output
@@ -157,17 +155,6 @@ async function generateCollage() {
       x += frameW - overlap;
     });
   }
-
-  // Signature
-  ctx.fillStyle = "#1a1a1a";
-  ctx.font = "700 32px Caveat, cursive";
-  ctx.textAlign = "center";
-  ctx.fillText("by twagirumukiza", totalW / 2, totalH - 45);
-
-  // LinkedIn line (as text, since canvas can't be clickable easily)
-  ctx.font = "500 14px Inter, sans-serif";
-  ctx.fillStyle = "#2c5f7c";
-  ctx.fillText("linkedin.com/in/innocent-twagirumukiza", totalW / 2, totalH - 20);
 
   // Show canvas
   placeholder.style.display = "none";
