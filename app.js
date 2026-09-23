@@ -50,7 +50,7 @@ function loadImage(file) {
   });
 }
 
-function drawPolaroid(ctx, img, x, y, width, height, rotationDeg = 0) {
+function drawPolaroid(ctx, img, x, y, width, height, rotationDeg = 0, crop = { zoom: 1, offsetX: 0, offsetY: 0 }) {
   const borderTop = 18;
   const borderSide = 18;
   const borderBottom = 52;
@@ -74,14 +74,26 @@ function drawPolaroid(ctx, img, x, y, width, height, rotationDeg = 0) {
 
   ctx.shadowColor = "transparent";
 
-  // Photo (cover crop)
-  const scale = Math.max(width / img.width, height / img.height);
-  const sw = width / scale;
-  const sh = height / scale;
-  const sx = (img.width - sw) / 2;
-  const sy = (img.height - sh) / 2;
+  // Photo (cover crop, ajustable : zoom + recadrage manuel)
+  const zoom = Math.max(1, crop.zoom || 1);
+  const baseScale = Math.max(width / img.width, height / img.height) * zoom;
+  const sw = Math.min(img.width, width / baseScale);
+  const sh = Math.min(img.height, height / baseScale);
 
+  // Marge disponible pour déplacer le cadrage dans l'image source
+  const slackX = (img.width - sw) / 2;
+  const slackY = (img.height - sh) / 2;
+  const offsetX = Math.max(-1, Math.min(1, (crop.offsetX || 0) / 100));
+  const offsetY = Math.max(-1, Math.min(1, (crop.offsetY || 0) / 100));
+  const sx = slackX * (1 + offsetX);
+  const sy = slackY * (1 + offsetY);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(borderSide, borderTop, width, height);
+  ctx.clip();
   ctx.drawImage(img, sx, sy, sw, sh, borderSide, borderTop, width, height);
+  ctx.restore();
 
   // Subtle inner border
   ctx.strokeStyle = "rgba(0,0,0,0.06)";
@@ -143,7 +155,8 @@ function renderCollage() {
         y + t.offsetY,
         photoW,
         photoH,
-        t.rotation
+        t.rotation,
+        { zoom: t.cropZoom / 100, offsetX: t.cropOffsetX, offsetY: t.cropOffsetY }
       );
       y += frameH - overlap;
     });
@@ -162,7 +175,8 @@ function renderCollage() {
         baseY + t.offsetY,
         photoW,
         photoH,
-        t.rotation
+        t.rotation,
+        { zoom: t.cropZoom / 100, offsetX: t.cropOffsetX, offsetY: t.cropOffsetY }
       );
       x += frameW - overlap;
     });
@@ -200,6 +214,23 @@ function buildAdjusters() {
         <input type="range" min="-25" max="25" value="${t.rotation}" data-index="${i}" data-prop="rotation" />
         <span class="value">${t.rotation}°</span>
       </div>
+      <div class="crop-subtitle">Recadrage de la photo</div>
+      <div class="slider-row">
+        <label>Zoom</label>
+        <input type="range" min="100" max="300" step="5" value="${t.cropZoom}" data-index="${i}" data-prop="cropZoom" />
+        <span class="value">${(t.cropZoom / 100).toFixed(2)}×</span>
+      </div>
+      <div class="slider-row">
+        <label>Cadrage X</label>
+        <input type="range" min="-100" max="100" value="${t.cropOffsetX}" data-index="${i}" data-prop="cropOffsetX" />
+        <span class="value">${t.cropOffsetX}</span>
+      </div>
+      <div class="slider-row">
+        <label>Cadrage Y</label>
+        <input type="range" min="-100" max="100" value="${t.cropOffsetY}" data-index="${i}" data-prop="cropOffsetY" />
+        <span class="value">${t.cropOffsetY}</span>
+      </div>
+      <button type="button" class="btn ghost crop-reset-btn" data-index="${i}">Réinitialiser le recadrage</button>
     `;
     photoAdjusters.appendChild(div);
   });
@@ -214,8 +245,26 @@ function buildAdjusters() {
 
       // Update value display
       const valueSpan = e.target.parentElement.querySelector(".value");
-      valueSpan.textContent = prop === "rotation" ? value + "°" : value;
+      if (prop === "rotation") {
+        valueSpan.textContent = value + "°";
+      } else if (prop === "cropZoom") {
+        valueSpan.textContent = (value / 100).toFixed(2) + "×";
+      } else {
+        valueSpan.textContent = value;
+      }
 
+      renderCollage();
+    });
+  });
+
+  // Reset crop per photo
+  photoAdjusters.querySelectorAll(".crop-reset-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      const index = parseInt(e.target.dataset.index, 10);
+      transforms[index].cropZoom = 100;
+      transforms[index].cropOffsetX = 0;
+      transforms[index].cropOffsetY = 0;
+      buildAdjusters();
       renderCollage();
     });
   });
@@ -242,6 +291,9 @@ async function generateCollage() {
     offsetX: (i % 2 === 0 ? -8 : 12) + Math.round((Math.random() - 0.5) * 10),
     offsetY: Math.round((Math.random() - 0.5) * 8),
     rotation: Math.round((Math.random() - 0.5) * 8),
+    cropZoom: 100,    // 100 = cadrage automatique (cover), jusqu'à 300 = zoom x3
+    cropOffsetX: 0,   // -100 (gauche) à 100 (droite)
+    cropOffsetY: 0,   // -100 (haut) à 100 (bas)
   }));
 
   renderCollage();

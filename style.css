@@ -278,6 +278,24 @@ footer {
   color: var(--accent);
 }
 
+.crop-subtitle {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  margin: 0.75rem 0 0.5rem;
+  padding-top: 0.6rem;
+  border-top: 1px dashed var(--border);
+}
+
+.crop-reset-btn {
+  margin-top: 0.5rem;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.75rem;
+  width: 100%;
+}
+
 .slider-row {
   display: grid;
   grid-template-columns: 70px 1fr 40px;
