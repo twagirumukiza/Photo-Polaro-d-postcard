@@ -60,7 +60,27 @@
         <div class="actions">
           <button id="generateBtn" class="btn primary" disabled>Générer le collage</button>
           <button id="downloadBtn" class="btn secondary" disabled>Télécharger PNG</button>
+          <button id="embedBtn" class="btn secondary" disabled>Code HTML</button>
           <button id="resetBtn" class="btn ghost">Réinitialiser</button>
+        </div>
+
+        <!-- Modal code d'intégration -->
+        <div id="embedModal" class="modal" style="display:none;">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h3>Code d’intégration HTML</h3>
+              <button id="closeModal" class="close-btn">&times;</button>
+            </div>
+            <p class="hint">Copiez ce code et collez-le dans votre site. Remplacez <code>VOTRE-IMAGE.png</code> par le chemin de votre fichier téléchargé.</p>
+            <textarea id="embedCode" readonly rows="12"></textarea>
+            <button id="copyEmbedBtn" class="btn primary">Copier le code</button>
+          </div>
+        </div>
+
+        <!-- Contrôles de position par photo (apparaît après génération) -->
+        <div id="positionControls" class="position-controls" style="display:none;">
+          <h3>Ajuster chaque polaroid</h3>
+          <div id="photoAdjusters"></div>
         </div>
       </section>
 

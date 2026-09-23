@@ -12,9 +12,14 @@ const resetBtn = document.getElementById("resetBtn");
 const bgColorInput = document.getElementById("bgColor");
 const canvas = document.getElementById("resultCanvas");
 const placeholder = document.getElementById("previewPlaceholder");
+const positionControls = document.getElementById("positionControls");
+const photoAdjusters = document.getElementById("photoAdjusters");
 const ctx = canvas.getContext("2d");
 
-let loadedImages = []; // Array of HTMLImageElement
+let images = [];           // HTMLImageElement[]
+let transforms = [];       // { offsetX, offsetY, rotation }[]
+let currentOrientation = "vertical";
+let currentBg = "#f5f0e8";
 
 // ---------- Helpers ----------
 function getOrientation() {
@@ -30,11 +35,10 @@ function loadImage(file) {
   });
 }
 
-// Draw a single polaroid frame (white border + shadow + photo)
 function drawPolaroid(ctx, img, x, y, width, height, rotationDeg = 0) {
   const borderTop = 18;
   const borderSide = 18;
-  const borderBottom = 52; // more space at bottom like classic polaroid
+  const borderBottom = 52;
   const frameW = width + borderSide * 2;
   const frameH = height + borderTop + borderBottom;
 
@@ -53,10 +57,9 @@ function drawPolaroid(ctx, img, x, y, width, height, rotationDeg = 0) {
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, frameW, frameH);
 
-  // Reset shadow for the photo
   ctx.shadowColor = "transparent";
 
-  // Photo (cover style, centered crop)
+  // Photo (cover crop)
   const scale = Math.max(width / img.width, height / img.height);
   const sw = width / scale;
   const sh = height / scale;
@@ -71,8 +74,137 @@ function drawPolaroid(ctx, img, x, y, width, height, rotationDeg = 0) {
   ctx.strokeRect(borderSide + 0.5, borderTop + 0.5, width - 1, height - 1);
 
   ctx.restore();
+}
 
-  return { frameW, frameH };
+// ---------- Render ----------
+function renderCollage() {
+  if (images.length === 0) return;
+
+  const photoW = 280;
+  const photoH = 280;
+  const padding = 60;
+  const orientation = currentOrientation;
+  const bgColor = currentBg;
+
+  let totalW, totalH;
+
+  if (orientation === "vertical") {
+    const frameH = photoH + 18 + 52;
+    const overlap = 70;
+    totalW = photoW + 36 + padding * 2 + 40;
+    totalH = frameH + (images.length - 1) * (frameH - overlap) + padding * 2;
+  } else {
+    const frameW = photoW + 36;
+    const overlap = 50;
+    totalW = frameW + (images.length - 1) * (frameW - overlap) + padding * 2;
+    totalH = photoH + 18 + 52 + padding * 2;
+  }
+
+  // High-DPI
+  const dpr = 2;
+  canvas.width = totalW * dpr;
+  canvas.height = totalH * dpr;
+  canvas.style.width = totalW + "px";
+  canvas.style.height = totalH + "px";
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  // Background
+  ctx.fillStyle = bgColor;
+  ctx.fillRect(0, 0, totalW, totalH);
+
+  // Draw each polaroid with its transform
+  if (orientation === "vertical") {
+    const frameH = photoH + 18 + 52;
+    const overlap = 70;
+    let y = padding;
+    const baseX = (totalW - (photoW + 36)) / 2;
+
+    images.forEach((img, i) => {
+      const t = transforms[i];
+      drawPolaroid(
+        ctx,
+        img,
+        baseX + t.offsetX,
+        y + t.offsetY,
+        photoW,
+        photoH,
+        t.rotation
+      );
+      y += frameH - overlap;
+    });
+  } else {
+    const frameW = photoW + 36;
+    const overlap = 50;
+    let x = padding;
+    const baseY = padding + 10;
+
+    images.forEach((img, i) => {
+      const t = transforms[i];
+      drawPolaroid(
+        ctx,
+        img,
+        x + t.offsetX,
+        baseY + t.offsetY,
+        photoW,
+        photoH,
+        t.rotation
+      );
+      x += frameW - overlap;
+    });
+  }
+
+  placeholder.style.display = "none";
+  canvas.style.display = "block";
+  downloadBtn.disabled = false;
+  if (typeof embedBtn !== "undefined") embedBtn.disabled = false;
+}
+
+// ---------- Build adjusters UI ----------
+function buildAdjusters() {
+  photoAdjusters.innerHTML = "";
+
+  images.forEach((_, i) => {
+    const t = transforms[i];
+    const div = document.createElement("div");
+    div.className = "photo-adjuster";
+    div.innerHTML = `
+      <div class="title">Photo ${i + 1}</div>
+      <div class="slider-row">
+        <label>X</label>
+        <input type="range" min="-120" max="120" value="${t.offsetX}" data-index="${i}" data-prop="offsetX" />
+        <span class="value">${t.offsetX}</span>
+      </div>
+      <div class="slider-row">
+        <label>Y</label>
+        <input type="range" min="-120" max="120" value="${t.offsetY}" data-index="${i}" data-prop="offsetY" />
+        <span class="value">${t.offsetY}</span>
+      </div>
+      <div class="slider-row">
+        <label>Rotation</label>
+        <input type="range" min="-25" max="25" value="${t.rotation}" data-index="${i}" data-prop="rotation" />
+        <span class="value">${t.rotation}°</span>
+      </div>
+    `;
+    photoAdjusters.appendChild(div);
+  });
+
+  // Listen to all sliders
+  photoAdjusters.querySelectorAll('input[type="range"]').forEach((slider) => {
+    slider.addEventListener("input", (e) => {
+      const index = parseInt(e.target.dataset.index, 10);
+      const prop = e.target.dataset.prop;
+      const value = parseInt(e.target.value, 10);
+      transforms[index][prop] = value;
+
+      // Update value display
+      const valueSpan = e.target.parentElement.querySelector(".value");
+      valueSpan.textContent = prop === "rotation" ? value + "°" : value;
+
+      renderCollage();
+    });
+  });
+
+  positionControls.style.display = "block";
 }
 
 // ---------- Generate ----------
@@ -85,119 +217,30 @@ async function generateCollage() {
     return;
   }
 
-  // Load images
-  loadedImages = await Promise.all(files.map(loadImage));
+  images = await Promise.all(files.map(loadImage));
+  currentOrientation = getOrientation();
+  currentBg = bgColorInput.value;
 
-  // Use only the selected count (if more files selected)
-  const images = loadedImages.slice(0, count);
-  const orientation = getOrientation();
-  const bgColor = bgColorInput.value;
+  // Initial transforms (slight natural offset + random rotation)
+  transforms = images.map((_, i) => ({
+    offsetX: (i % 2 === 0 ? -8 : 12) + Math.round((Math.random() - 0.5) * 10),
+    offsetY: Math.round((Math.random() - 0.5) * 8),
+    rotation: Math.round((Math.random() - 0.5) * 8),
+  }));
 
-  // Polaroid photo area size
-  const photoW = 280;
-  const photoH = 280;
-
-  // Random small rotations for natural look
-  const rotations = images.map(() => (Math.random() - 0.5) * 8); // -4° to +4°
-
-  // Calculate layout
-  let totalW, totalH;
-  const padding = 60;
-
-  if (orientation === "vertical") {
-    // Stacked vertically with slight overlap
-    const frameH = photoH + 18 + 52;
-    const overlap = 70;
-    totalW = photoW + 36 + padding * 2 + 40;
-    totalH = frameH + (images.length - 1) * (frameH - overlap) + padding * 2;
-  } else {
-    // Horizontal
-    const frameW = photoW + 36;
-    const overlap = 50;
-    totalW = frameW + (images.length - 1) * (frameW - overlap) + padding * 2;
-    totalH = photoH + 18 + 52 + padding * 2;
-  }
-
-  // High-DPI for crisp output
-  const dpr = 2;
-  canvas.width = totalW * dpr;
-  canvas.height = totalH * dpr;
-  canvas.style.width = totalW + "px";
-  canvas.style.height = totalH + "px";
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-  // Background
-  ctx.fillStyle = bgColor;
-  ctx.fillRect(0, 0, totalW, totalH);
-
-  // Draw polaroids
-  if (orientation === "vertical") {
-    const frameH = photoH + 18 + 52;
-    const overlap = 70;
-    let y = padding;
-    const baseX = (totalW - (photoW + 36)) / 2;
-
-    images.forEach((img, i) => {
-      // Slight horizontal offset for natural stack
-      const offsetX = (i % 2 === 0 ? -8 : 12) + (Math.random() - 0.5) * 10;
-      drawPolaroid(ctx, img, baseX + offsetX, y, photoW, photoH, rotations[i]);
-      y += frameH - overlap;
-    });
-  } else {
-    const frameW = photoW + 36;
-    const overlap = 50;
-    let x = padding;
-    const baseY = padding + 10;
-
-    images.forEach((img, i) => {
-      const offsetY = (i % 2 === 0 ? -6 : 10) + (Math.random() - 0.5) * 8;
-      drawPolaroid(ctx, img, x, baseY + offsetY, photoW, photoH, rotations[i]);
-      x += frameW - overlap;
-    });
-  }
-
-  // Show canvas
-  placeholder.style.display = "none";
-  canvas.style.display = "block";
-  downloadBtn.disabled = false;
+  renderCollage();
+  buildAdjusters();
 }
 
-// ---------- Events ----------
-photoInput.addEventListener("change", () => {
-  const count = photoInput.files.length;
-  generateBtn.disabled = count === 0;
-  if (count > 0) {
-    // Auto-adjust select to available photos
-    const max = Math.min(count, 6);
-    if (parseInt(photoCountSelect.value, 10) > max) {
-      photoCountSelect.value = max;
-    }
-  }
-});
-
-generateBtn.addEventListener("click", () => {
-  generateBtn.disabled = true;
-  generateBtn.textContent = "Génération…";
-  generateCollage()
-    .catch((err) => {
-      console.error(err);
-      alert("Erreur lors du chargement des images.");
-    })
-    .finally(() => {
-      generateBtn.disabled = false;
-      generateBtn.textContent = "Générer le collage";
-    });
-});
-
+// ---------- Download ----------
 downloadBtn.addEventListener("click", () => {
   if (!canvas.width || !canvas.height) {
     alert("Aucun collage à télécharger. Générez d'abord une image.");
     return;
   }
 
-  const filename = `polaroid-postcard-${Date.now()}.png`;
+  const filename = "polaroid-postcard-" + Date.now() + ".png";
 
-  // Méthode 1 : toBlob (recommandée)
   if (canvas.toBlob) {
     canvas.toBlob(
       (blob) => {
@@ -207,7 +250,6 @@ downloadBtn.addEventListener("click", () => {
           setTimeout(() => URL.revokeObjectURL(url), 2000);
           return;
         }
-        // Fallback si blob null
         fallbackDownload(filename);
       },
       "image/png",
@@ -235,20 +277,133 @@ function fallbackDownload(filename) {
   } catch (e) {
     console.error(e);
     alert(
-      "Le téléchargement automatique a échoué.\n\n" +
-      "Astuce : faites un clic droit (ou appui long) sur le collage → « Enregistrer l'image sous… »"
+      "Le téléchargement automatique a échoué.\\n\\n" +
+        "Astuce : faites un clic droit (ou appui long) sur le collage → « Enregistrer l'image sous… »"
     );
   }
 }
 
+// ---------- Events ----------
+photoInput.addEventListener("change", () => {
+  const count = photoInput.files.length;
+  generateBtn.disabled = count === 0;
+  if (count > 0) {
+    const max = Math.min(count, 6);
+    if (parseInt(photoCountSelect.value, 10) > max) {
+      photoCountSelect.value = max;
+    }
+  }
+});
+
+generateBtn.addEventListener("click", () => {
+  generateBtn.disabled = true;
+  generateBtn.textContent = "Génération…";
+  generateCollage()
+    .catch((err) => {
+      console.error(err);
+      alert("Erreur lors du chargement des images.");
+    })
+    .finally(() => {
+      generateBtn.disabled = false;
+      generateBtn.textContent = "Générer le collage";
+    });
+});
+
+// Live update when orientation or bg changes (if already generated)
+document.querySelectorAll('input[name="orientation"]').forEach((radio) => {
+  radio.addEventListener("change", () => {
+    if (images.length > 0) {
+      currentOrientation = getOrientation();
+      renderCollage();
+    }
+  });
+});
+
+bgColorInput.addEventListener("input", () => {
+  if (images.length > 0) {
+    currentBg = bgColorInput.value;
+    renderCollage();
+  }
+});
+
 resetBtn.addEventListener("click", () => {
   photoInput.value = "";
-  loadedImages = [];
+  images = [];
+  transforms = [];
   canvas.style.display = "none";
   placeholder.style.display = "block";
+  positionControls.style.display = "none";
+  photoAdjusters.innerHTML = "";
   generateBtn.disabled = true;
   downloadBtn.disabled = true;
+  if (typeof embedBtn !== "undefined") embedBtn.disabled = true;
   photoCountSelect.value = "3";
   document.querySelector('input[name="orientation"][value="vertical"]').checked = true;
   bgColorInput.value = "#f5f0e8";
+
+// ---------- Embed / HTML code ----------
+const embedBtn = document.getElementById("embedBtn");
+const embedModal = document.getElementById("embedModal");
+const embedCode = document.getElementById("embedCode");
+const closeModal = document.getElementById("closeModal");
+const copyEmbedBtn = document.getElementById("copyEmbedBtn");
+
+embedBtn.addEventListener("click", () => {
+  if (!canvas.width) return;
+
+  const html = `<!-- Polaroid Postcard – by twagirumukiza -->
+<figure class="polaroid-postcard" style="
+  max-width: 420px;
+  margin: 2rem auto;
+  text-align: center;
+  font-family: system-ui, sans-serif;
+">
+  <img
+    src="VOTRE-IMAGE.png"
+    alt="Collage polaroid"
+    style="
+      width: 100%;
+      height: auto;
+      border-radius: 4px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+      display: block;
+    "
+  />
+  <figcaption style="
+    margin-top: 0.75rem;
+    font-size: 0.85rem;
+    color: #666;
+  ">
+    <!-- Optionnel : légende -->
+  </figcaption>
+</figure>`;
+
+  embedCode.value = html;
+  embedModal.style.display = "flex";
+});
+
+closeModal.addEventListener("click", () => {
+  embedModal.style.display = "none";
+});
+
+embedModal.addEventListener("click", (e) => {
+  if (e.target === embedModal) {
+    embedModal.style.display = "none";
+  }
+});
+
+copyEmbedBtn.addEventListener("click", () => {
+  embedCode.select();
+  navigator.clipboard.writeText(embedCode.value).then(() => {
+    copyEmbedBtn.textContent = "Copié !";
+    setTimeout(() => {
+      copyEmbedBtn.textContent = "Copier le code";
+    }, 1800);
+  }).catch(() => {
+    document.execCommand("copy");
+    copyEmbedBtn.textContent = "Copié !";
+    setTimeout(() => {
+      copyEmbedBtn.textContent = "Copier le code";
+    }, 1800);
+  });
 });
