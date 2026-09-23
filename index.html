@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Polaroid Postcard Generator – by twagirumukiza</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Polaroid Postcard</h1>
+      <p class="subtitle">Créez un collage style carte postale / polaroids empilés</p>
+    </header>
+
+    <main>
+      <section class="controls">
+        <div class="control-group">
+          <label for="photoInput">Photos</label>
+          <input type="file" id="photoInput" accept="image/*" multiple />
+          <p class="hint">Sélectionnez 1 à 6 photos (recommandé : 2–4)</p>
+        </div>
+
+        <div class="control-row">
+          <div class="control-group">
+            <label for="photoCount">Nombre de photos</label>
+            <select id="photoCount">
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3" selected>3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+              <option value="6">6</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label>Orientation</label>
+            <div class="radio-group">
+              <label class="radio">
+                <input type="radio" name="orientation" value="vertical" checked />
+                Verticale
+              </label>
+              <label class="radio">
+                <input type="radio" name="orientation" value="horizontal" />
+                Horizontale
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <label for="bgColor">Couleur de fond</label>
+          <input type="color" id="bgColor" value="#f5f0e8" />
+        </div>
+
+        <div class="actions">
+          <button id="generateBtn" class="btn primary" disabled>Générer le collage</button>
+          <button id="downloadBtn" class="btn secondary" disabled>Télécharger PNG</button>
+          <button id="resetBtn" class="btn ghost">Réinitialiser</button>
+        </div>
+      </section>
+
+      <section class="preview-area">
+        <div id="previewPlaceholder" class="placeholder">
+          <p>Vos polaroids apparaîtront ici</p>
+          <p class="small">Uploadez des photos puis cliquez sur « Générer »</p>
+        </div>
+        <canvas id="resultCanvas" style="display:none;"></canvas>
+      </section>
+    </main>
+
+    <footer>
+      <p class="signature">by <strong>twagirumukiza</strong></p>
+      <a href="https://www.linkedin.com/in/innocent-twagirumukiza" target="_blank" rel="noopener noreferrer" class="linkedin">
+        LinkedIn →
+      </a>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
