@@ -190,47 +190,67 @@ function renderCollage() {
 }
 
 // ---------- Build adjusters UI ----------
+const ORDINAL_SUFFIX_FR = (n) => (n === 1 ? "er" : "e");
+
 function buildAdjusters() {
   photoAdjusters.innerHTML = "";
 
   images.forEach((_, i) => {
     const t = transforms[i];
     const div = document.createElement("div");
-    div.className = "photo-adjuster";
+    div.className = "photo-adjuster" + (t.collapsed ? " is-collapsed" : "");
+
+    const positionOptions = images
+      .map((__, p) => `<option value="${p}" ${p === i ? "selected" : ""}>${p + 1}${ORDINAL_SUFFIX_FR(p + 1)}</option>`)
+      .join("");
+
     div.innerHTML = `
-      <div class="title">Photo ${i + 1}</div>
-      <div class="slider-row">
-        <label>X</label>
-        <input type="range" min="-120" max="120" value="${t.offsetX}" data-index="${i}" data-prop="offsetX" />
-        <span class="value">${t.offsetX}</span>
+      <div class="adjuster-header">
+        <button type="button" class="adjuster-toggle" data-index="${i}" aria-expanded="${!t.collapsed}">
+          <span class="chevron">▸</span>
+          <span class="title">Photo ${i + 1}</span>
+        </button>
+        <label class="position-select-label">
+          Position
+          <select class="position-select" data-index="${i}">
+            ${positionOptions}
+          </select>
+        </label>
       </div>
-      <div class="slider-row">
-        <label>Y</label>
-        <input type="range" min="-120" max="120" value="${t.offsetY}" data-index="${i}" data-prop="offsetY" />
-        <span class="value">${t.offsetY}</span>
+      <div class="adjuster-body">
+        <div class="slider-row">
+          <label>X</label>
+          <input type="range" min="-120" max="120" value="${t.offsetX}" data-index="${i}" data-prop="offsetX" />
+          <span class="value">${t.offsetX}</span>
+        </div>
+        <div class="slider-row">
+          <label>Y</label>
+          <input type="range" min="-120" max="120" value="${t.offsetY}" data-index="${i}" data-prop="offsetY" />
+          <span class="value">${t.offsetY}</span>
+        </div>
+        <div class="slider-row">
+          <label>Rotation</label>
+          <input type="range" min="-25" max="25" value="${t.rotation}" data-index="${i}" data-prop="rotation" />
+          <span class="value">${t.rotation}°</span>
+        </div>
+        <div class="crop-subtitle">Recadrage de la photo</div>
+        <div class="slider-row">
+          <label>Zoom</label>
+          <input type="range" min="100" max="300" step="5" value="${t.cropZoom}" data-index="${i}" data-prop="cropZoom" />
+          <span class="value">${(t.cropZoom / 100).toFixed(2)}×</span>
+        </div>
+        <div class="slider-row">
+          <label>Cadrage X</label>
+          <input type="range" min="-100" max="100" value="${t.cropOffsetX}" data-index="${i}" data-prop="cropOffsetX" />
+          <span class="value">${t.cropOffsetX}</span>
+        </div>
+        <div class="slider-row">
+          <label>Cadrage Y</label>
+          <input type="range" min="-100" max="100" value="${t.cropOffsetY}" data-index="${i}" data-prop="cropOffsetY" />
+          <span class="value">${t.cropOffsetY}</span>
+        </div>
+        <button type="button" class="btn ghost crop-reset-btn" data-index="${i}">Réinitialiser le recadrage</button>
       </div>
-      <div class="slider-row">
-        <label>Rotation</label>
-        <input type="range" min="-25" max="25" value="${t.rotation}" data-index="${i}" data-prop="rotation" />
-        <span class="value">${t.rotation}°</span>
-      </div>
-      <div class="crop-subtitle">Recadrage de la photo</div>
-      <div class="slider-row">
-        <label>Zoom</label>
-        <input type="range" min="100" max="300" step="5" value="${t.cropZoom}" data-index="${i}" data-prop="cropZoom" />
-        <span class="value">${(t.cropZoom / 100).toFixed(2)}×</span>
-      </div>
-      <div class="slider-row">
-        <label>Cadrage X</label>
-        <input type="range" min="-100" max="100" value="${t.cropOffsetX}" data-index="${i}" data-prop="cropOffsetX" />
-        <span class="value">${t.cropOffsetX}</span>
-      </div>
-      <div class="slider-row">
-        <label>Cadrage Y</label>
-        <input type="range" min="-100" max="100" value="${t.cropOffsetY}" data-index="${i}" data-prop="cropOffsetY" />
-        <span class="value">${t.cropOffsetY}</span>
-      </div>
-      <button type="button" class="btn ghost crop-reset-btn" data-index="${i}">Réinitialiser le recadrage</button>
     `;
     photoAdjusters.appendChild(div);
   });
@@ -269,7 +289,39 @@ function buildAdjusters() {
     });
   });
 
+  // Panneaux rétractables : replier/déplier sans tout reconstruire
+  photoAdjusters.querySelectorAll(".adjuster-toggle").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      const index = parseInt(btn.dataset.index, 10);
+      const collapsed = !transforms[index].collapsed;
+      transforms[index].collapsed = collapsed;
+      const card = btn.closest(".photo-adjuster");
+      card.classList.toggle("is-collapsed", collapsed);
+      btn.setAttribute("aria-expanded", (!collapsed).toString());
+    });
+  });
+
+  // Choix de la position (1re, 2e, 3e...) de chaque polaroid
+  photoAdjusters.querySelectorAll(".position-select").forEach((select) => {
+    select.addEventListener("change", (e) => {
+      const fromIndex = parseInt(e.target.dataset.index, 10);
+      const toIndex = parseInt(e.target.value, 10);
+      movePhotoToPosition(fromIndex, toIndex);
+      renderCollage();
+      buildAdjusters();
+    });
+  });
+
   positionControls.style.display = "block";
+}
+
+// Déplace une photo (et ses réglages) d'une position à une autre dans l'ordre du collage
+function movePhotoToPosition(fromIndex, toIndex) {
+  if (fromIndex === toIndex) return;
+  const [img] = images.splice(fromIndex, 1);
+  const [t] = transforms.splice(fromIndex, 1);
+  images.splice(toIndex, 0, img);
+  transforms.splice(toIndex, 0, t);
 }
 
 // ---------- Generate ----------
@@ -294,6 +346,7 @@ async function generateCollage() {
     cropZoom: 100,    // 100 = cadrage automatique (cover), jusqu'à 300 = zoom x3
     cropOffsetX: 0,   // -100 (gauche) à 100 (droite)
     cropOffsetY: 0,   // -100 (haut) à 100 (bas)
+    collapsed: false, // état replié/déplié du panneau de réglages
   }));
 
   renderCollage();
