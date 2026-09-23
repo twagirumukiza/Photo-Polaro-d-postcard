@@ -14,7 +14,16 @@ const canvas = document.getElementById("resultCanvas");
 const placeholder = document.getElementById("previewPlaceholder");
 const positionControls = document.getElementById("positionControls");
 const photoAdjusters = document.getElementById("photoAdjusters");
+const embedBtn = document.getElementById("embedBtn");
+const embedModal = document.getElementById("embedModal");
+const embedCode = document.getElementById("embedCode");
+const closeModal = document.getElementById("closeModal");
+const copyEmbedBtn = document.getElementById("copyEmbedBtn");
 const ctx = canvas.getContext("2d");
+
+if (!ctx) {
+  alert("Votre navigateur ne supporte pas l'élément <canvas>. Essayez avec une version récente de Chrome, Firefox ou Edge.");
+}
 
 let images = [];           // HTMLImageElement[]
 let transforms = [];       // { offsetX, offsetY, rotation }[]
@@ -28,10 +37,15 @@ function getOrientation() {
 
 function loadImage(file) {
   return new Promise((resolve, reject) => {
+    if (!file.type.startsWith("image/")) {
+      reject(new Error(`« ${file.name} » n'est pas une image valide (type détecté : ${file.type || "inconnu"}).`));
+      return;
+    }
     const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
     img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = URL.createObjectURL(file);
+    img.onerror = () => reject(new Error(`Impossible de charger l'image « ${file.name} ». Le fichier est peut-être corrompu ou dans un format non supporté (ex. HEIC).`));
+    img.src = objectUrl;
   });
 }
 
@@ -156,7 +170,7 @@ function renderCollage() {
   placeholder.style.display = "none";
   canvas.style.display = "block";
   downloadBtn.disabled = false;
-  if (typeof embedBtn !== "undefined") embedBtn.disabled = false;
+  embedBtn.disabled = false;
 }
 
 // ---------- Build adjusters UI ----------
@@ -301,7 +315,11 @@ generateBtn.addEventListener("click", () => {
   generateCollage()
     .catch((err) => {
       console.error(err);
-      alert("Erreur lors du chargement des images.");
+      alert(
+        "Erreur lors du chargement des images.\n\n" +
+          "Détail : " + (err && err.message ? err.message : err) +
+          "\n\nOuvrez la console du navigateur (F12) pour plus de détails."
+      );
     })
     .finally(() => {
       generateBtn.disabled = false;
@@ -336,19 +354,13 @@ resetBtn.addEventListener("click", () => {
   photoAdjusters.innerHTML = "";
   generateBtn.disabled = true;
   downloadBtn.disabled = true;
-  if (typeof embedBtn !== "undefined") embedBtn.disabled = true;
+  embedBtn.disabled = true;
   photoCountSelect.value = "3";
   document.querySelector('input[name="orientation"][value="vertical"]').checked = true;
   bgColorInput.value = "#f5f0e8";
 });
 
 // ---------- Embed / HTML code ----------
-const embedBtn = document.getElementById("embedBtn");
-const embedModal = document.getElementById("embedModal");
-const embedCode = document.getElementById("embedCode");
-const closeModal = document.getElementById("closeModal");
-const copyEmbedBtn = document.getElementById("copyEmbedBtn");
-
 embedBtn.addEventListener("click", () => {
   if (!canvas.width) return;
 
