@@ -588,6 +588,83 @@ positionControlsToggle.addEventListener("click", () => {
 });
 
 // ---------- Embed / HTML code ----------
+
+// Bloc réutilisable "popup plein écran" (lightbox) : ouvre une photo en grand
+// au clic, et referme en revenant exactement à la position de défilement de
+// départ. `namespace` évite les collisions si les deux types de code générés
+// (image unique + pile de photos) sont collés sur la même page.
+function buildLightboxAssets(namespace) {
+  return {
+    html: `<div class="pp-lightbox" data-pp-lightbox="${namespace}" aria-hidden="true">
+  <button type="button" class="pp-lightbox-close" aria-label="Fermer">&times;</button>
+  <img src="" alt="" />
+</div>`,
+    css: `  .pp-lightbox[data-pp-lightbox="${namespace}"] {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    padding: 2rem;
+  }
+  .pp-lightbox[data-pp-lightbox="${namespace}"].is-open { display: flex; }
+  .pp-lightbox[data-pp-lightbox="${namespace}"] img {
+    max-width: 92vw;
+    max-height: 88vh;
+    border-radius: 4px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  }
+  .pp-lightbox[data-pp-lightbox="${namespace}"] .pp-lightbox-close {
+    position: absolute;
+    top: 1rem;
+    right: 1.25rem;
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    border: none;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 50%;
+    font-size: 1.4rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .pp-lightbox[data-pp-lightbox="${namespace}"] .pp-lightbox-close:hover { background: rgba(255, 255, 255, 0.3); }
+  body.pp-lightbox-open-${namespace} { overflow: hidden; }`,
+    js: `    var lightbox = document.querySelector('[data-pp-lightbox="${namespace}"]');
+    var lightboxImg = lightbox ? lightbox.querySelector("img") : null;
+    var lightboxClose = lightbox ? lightbox.querySelector(".pp-lightbox-close") : null;
+    var savedScrollY = 0;
+
+    function openLightbox(src, alt) {
+      if (!lightbox) return;
+      savedScrollY = window.scrollY;
+      lightboxImg.src = src;
+      lightboxImg.alt = alt || "";
+      lightbox.classList.add("is-open");
+      lightbox.setAttribute("aria-hidden", "false");
+      document.body.classList.add("pp-lightbox-open-${namespace}");
+    }
+    function closeLightbox() {
+      if (!lightbox) return;
+      lightbox.classList.remove("is-open");
+      lightbox.setAttribute("aria-hidden", "true");
+      document.body.classList.remove("pp-lightbox-open-${namespace}");
+      window.scrollTo(0, savedScrollY);
+    }
+    if (lightboxClose) lightboxClose.addEventListener("click", closeLightbox);
+    if (lightbox) {
+      lightbox.addEventListener("click", function (e) {
+        if (e.target === lightbox) closeLightbox();
+      });
+    }
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") closeLightbox();
+    });`,
+  };
+}
+
 function buildEmbedHtml(imagePath, width, height) {
   const hasSize = Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0;
   const w = hasSize ? Math.round(width) : null;
@@ -599,9 +676,18 @@ function buildEmbedHtml(imagePath, width, height) {
   const note = hasSize
     ? "Responsive : occupe le plus de place possible sans jamais dépasser la résolution naturelle de l'image (évite le flou d'agrandissement)."
     : "Responsive : occupe le plus de place possible. Renseignez la largeur/hauteur réelles de l'image pour éviter tout flou d'agrandissement.";
+  const src = imagePath || "VOTRE-IMAGE.png";
+  const lb = buildLightboxAssets("single");
 
   return `<!-- Polaroid Postcard – by twagirumukiza -->
 <!-- ${note} -->
+<!-- Cliquez sur la photo pour l'ouvrir en grand (popup) ; Échap, clic à
+     l'extérieur ou le bouton de fermeture referment le popup et vous
+     ramènent exactement où vous étiez sur la page. -->
+<style>
+${lb.css}
+</style>
+
 <figure class="polaroid-postcard" style="
   width: 100%;
   max-width: min(92vw, ${maxWidthValue});${aspectRatioLine}
@@ -610,8 +696,9 @@ function buildEmbedHtml(imagePath, width, height) {
   font-family: system-ui, sans-serif;
 ">
   <img
-    src="${imagePath || "VOTRE-IMAGE.png"}"
+    src="${src}"
     alt="Collage polaroid"${imgSizeAttrs}
+    data-pp-open="single"
     style="
       width: 100%;
       height: ${imgHeightStyle};
@@ -619,6 +706,7 @@ function buildEmbedHtml(imagePath, width, height) {
       object-fit: contain;
       border-radius: 4px;
       box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+      cursor: zoom-in;
     "
   />
   <figcaption style="
@@ -628,7 +716,22 @@ function buildEmbedHtml(imagePath, width, height) {
   ">
     <!-- Optionnel : légende -->
   </figcaption>
-</figure>`;
+</figure>
+
+${lb.html}
+
+<script>
+  (function () {
+${lb.js}
+
+    var trigger = document.querySelector('[data-pp-open="single"]');
+    if (trigger) {
+      trigger.addEventListener("click", function () {
+        openLightbox(trigger.src, trigger.alt);
+      });
+    }
+  })();
+</script>`;
 }
 
 // Bouton "Code HTML" : à partir du collage qui vient d'être généré
@@ -663,16 +766,21 @@ function buildStandaloneEmbedHtml({ urls, orientation, bgColor }) {
     const src = escapeAttr((url && url.trim()) || `CHEMIN-PHOTO-${i + 1}.jpg`);
     const rot = MANUAL_ROTATIONS[i % MANUAL_ROTATIONS.length];
     return `    <div class="polaroid-item">
-      <div class="polaroid-frame" data-rotate="${rot}" style="transform: rotate(${rot}deg);">
+      <div class="polaroid-frame" data-rotate="${rot}" style="--rot: ${rot}deg;" data-pp-open="stack">
         <img src="${src}" alt="Photo ${i + 1}" loading="lazy" />
       </div>
     </div>`;
   }).join("\n");
 
+  const lb = buildLightboxAssets("stack");
+
   return `<!-- Polaroid Postcard (autonome) – by twagirumukiza -->
 <!-- Va chercher vos photos par leur URL/chemin et les met en scène en
      polaroids empilés, directement dans la page (aucune image pré-générée
-     n'est nécessaire). Remplacez les CHEMIN-PHOTO-N.jpg par vos liens. -->
+     n'est nécessaire). Remplacez les CHEMIN-PHOTO-N.jpg par vos liens.
+     Cliquez sur une photo pour l'ouvrir en grand (popup) ; Échap, clic à
+     l'extérieur ou le bouton de fermeture referment le popup et vous
+     ramènent exactement où vous étiez sur la page. -->
 <style>
   .polaroid-stack {
     --bg: ${bgColor};
@@ -700,12 +808,13 @@ function buildStandaloneEmbedHtml({ urls, orientation, bgColor }) {
     padding: 6% 6% 18% 6%;
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
     border-radius: 2px;
-    cursor: pointer;
+    cursor: zoom-in;
+    transform: rotate(var(--rot, 0deg));
     transition: transform 0.2s ease;
   }
-  .polaroid-stack .polaroid-frame.is-front {
-    z-index: 100;
-    transform: scale(1.05) !important;
+  .polaroid-stack .polaroid-frame:hover {
+    transform: rotate(var(--rot, 0deg)) scale(1.04);
+    z-index: 50;
   }
   .polaroid-stack .polaroid-frame img {
     display: block;
@@ -713,26 +822,33 @@ function buildStandaloneEmbedHtml({ urls, orientation, bgColor }) {
     aspect-ratio: 1 / 1;
     object-fit: cover;
     border-radius: 1px;
+    pointer-events: none;
   }
+${lb.css}
 </style>
 
 <div class="polaroid-stack${isHorizontal ? " horizontal" : ""}" data-polaroid-embed>
 ${items}
 </div>
 
+${lb.html}
+
 <script>
   (function () {
     var frames = document.querySelectorAll('[data-polaroid-embed] .polaroid-frame');
+
+${lb.js}
+
     frames.forEach(function (frame) {
       // Légère variation aléatoire à chaque chargement, pour un effet "pile de vraies photos"
       var base = parseFloat(frame.dataset.rotate || "0");
       var jitter = (Math.random() - 0.5) * 4;
-      frame.style.transform = "rotate(" + (base + jitter).toFixed(1) + "deg)";
+      frame.style.setProperty("--rot", (base + jitter).toFixed(1) + "deg");
 
-      // Clic sur une photo : la fait passer au premier plan
+      // Clic sur une photo : l'ouvre en grand (popup)
       frame.addEventListener("click", function () {
-        frames.forEach(function (f) { f.classList.remove("is-front"); });
-        frame.classList.add("is-front");
+        var img = frame.querySelector("img");
+        if (img) openLightbox(img.src, img.alt);
       });
     });
   })();
