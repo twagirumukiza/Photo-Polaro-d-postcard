@@ -12,9 +12,17 @@ const resetBtn = document.getElementById("resetBtn");
 const bgColorInput = document.getElementById("bgColor");
 const canvas = document.getElementById("resultCanvas");
 const placeholder = document.getElementById("previewPlaceholder");
+const previewHint = document.getElementById("previewHint");
 const positionControls = document.getElementById("positionControls");
+const positionControlsToggle = document.getElementById("positionControlsToggle");
 const photoAdjusters = document.getElementById("photoAdjusters");
 const embedBtn = document.getElementById("embedBtn");
+const embedManualBtn = document.getElementById("embedManualBtn");
+const embedManualFields = document.getElementById("embedManualFields");
+const embedImagePath = document.getElementById("embedImagePath");
+const embedImgWidth = document.getElementById("embedImgWidth");
+const embedImgHeight = document.getElementById("embedImgHeight");
+const embedGeneratedHint = document.getElementById("embedGeneratedHint");
 const embedModal = document.getElementById("embedModal");
 const embedCode = document.getElementById("embedCode");
 const closeModal = document.getElementById("closeModal");
@@ -30,6 +38,7 @@ let transforms = [];       // { offsetX, offsetY, rotation }[]
 let currentOrientation = "vertical";
 let currentBg = "#f5f0e8";
 let lastCollageSize = { width: 0, height: 0 }; // dimensions naturelles (CSS px) du dernier collage généré
+let photoHitboxes = [];    // zones cliquables (coordonnées CSS px du canvas) de chaque polaroid dessiné
 
 // ---------- Helpers ----------
 function getOrientation() {
@@ -140,6 +149,11 @@ function renderCollage() {
   ctx.fillRect(0, 0, totalW, totalH);
 
   // Draw each polaroid with its transform
+  photoHitboxes = [];
+  const borderSide = 18, borderTop = 18, borderBottom = 52;
+  const frameWSize = photoW + borderSide * 2;
+  const frameHSize = photoH + borderTop + borderBottom;
+
   if (orientation === "vertical") {
     const frameH = photoH + 18 + 52;
     const overlap = 70;
@@ -148,16 +162,19 @@ function renderCollage() {
 
     images.forEach((img, i) => {
       const t = transforms[i];
+      const frameX = baseX + t.offsetX;
+      const frameY = y + t.offsetY;
       drawPolaroid(
         ctx,
         img,
-        baseX + t.offsetX,
-        y + t.offsetY,
+        frameX,
+        frameY,
         photoW,
         photoH,
         t.rotation,
         { zoom: t.cropZoom / 100, offsetX: t.cropOffsetX, offsetY: t.cropOffsetY }
       );
+      photoHitboxes.push({ index: i, x: frameX, y: frameY, w: frameWSize, h: frameHSize, rotation: t.rotation });
       y += frameH - overlap;
     });
   } else {
@@ -168,25 +185,92 @@ function renderCollage() {
 
     images.forEach((img, i) => {
       const t = transforms[i];
+      const frameX = x + t.offsetX;
+      const frameY = baseY + t.offsetY;
       drawPolaroid(
         ctx,
         img,
-        x + t.offsetX,
-        baseY + t.offsetY,
+        frameX,
+        frameY,
         photoW,
         photoH,
         t.rotation,
         { zoom: t.cropZoom / 100, offsetX: t.cropOffsetX, offsetY: t.cropOffsetY }
       );
+      photoHitboxes.push({ index: i, x: frameX, y: frameY, w: frameWSize, h: frameHSize, rotation: t.rotation });
       x += frameW - overlap;
     });
   }
 
   placeholder.style.display = "none";
   canvas.style.display = "block";
+  previewHint.style.display = "block";
   downloadBtn.disabled = false;
   embedBtn.disabled = false;
   lastCollageSize = { width: totalW, height: totalH };
+}
+
+// ---------- Clic sur une photo du canvas → ouvre son panneau de réglages ----------
+function findPhotoAtCanvasPoint(canvasX, canvasY) {
+  // Parcours du dernier dessiné (dessus) au premier (dessous)
+  for (let k = photoHitboxes.length - 1; k >= 0; k--) {
+    const box = photoHitboxes[k];
+    const cx = box.x + box.w / 2;
+    const cy = box.y + box.h / 2;
+    const angle = (-box.rotation * Math.PI) / 180;
+    const dx = canvasX - cx;
+    const dy = canvasY - cy;
+    const rx = dx * Math.cos(angle) - dy * Math.sin(angle) + box.w / 2;
+    const ry = dx * Math.sin(angle) + dy * Math.cos(angle) + box.h / 2;
+    if (rx >= 0 && rx <= box.w && ry >= 0 && ry <= box.h) {
+      return box.index;
+    }
+  }
+  return -1;
+}
+
+canvas.addEventListener("click", (e) => {
+  if (!lastCollageSize.width) return;
+  const rect = canvas.getBoundingClientRect();
+  // Le canvas peut être réduit par le CSS (max-width:100%) : on remet les
+  // coordonnées à l'échelle CSS naturelle (celle utilisée par renderCollage).
+  const scale = lastCollageSize.width / rect.width;
+  const canvasX = (e.clientX - rect.left) * scale;
+  const canvasY = (e.clientY - rect.top) * scale;
+
+  const index = findPhotoAtCanvasPoint(canvasX, canvasY);
+  if (index >= 0) {
+    expandPhotoPanel(index, { scrollIntoView: true });
+  }
+});
+
+// Ouvre le panneau de réglages d'une photo (referme les autres, façon accordéon)
+function expandPhotoPanel(index, { scrollIntoView = false } = {}) {
+  if (!transforms[index]) return;
+
+  transforms.forEach((t, i) => {
+    t.collapsed = i !== index;
+  });
+
+  photoAdjusters.querySelectorAll(".photo-adjuster").forEach((card) => {
+    const i = parseInt(card.dataset.index, 10);
+    const collapsed = i !== index;
+    card.classList.toggle("is-collapsed", collapsed);
+    const toggleBtn = card.querySelector(".adjuster-toggle");
+    if (toggleBtn) toggleBtn.setAttribute("aria-expanded", (!collapsed).toString());
+  });
+
+  if (positionControls.classList.contains("is-collapsed")) {
+    positionControls.classList.remove("is-collapsed");
+    if (positionControlsToggle) positionControlsToggle.setAttribute("aria-expanded", "true");
+  }
+
+  if (scrollIntoView) {
+    const card = photoAdjusters.querySelector(`.photo-adjuster[data-index="${index}"]`);
+    if (card && card.scrollIntoView) {
+      card.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }
 }
 
 // ---------- Build adjusters UI ----------
@@ -199,10 +283,14 @@ function buildAdjusters() {
     const t = transforms[i];
     const div = document.createElement("div");
     div.className = "photo-adjuster" + (t.collapsed ? " is-collapsed" : "");
+    div.dataset.index = i;
 
     const positionOptions = images
       .map((__, p) => `<option value="${p}" ${p === i ? "selected" : ""}>${p + 1}${ORDINAL_SUFFIX_FR(p + 1)}</option>`)
       .join("");
+
+    const isFirst = i === 0;
+    const isLast = i === images.length - 1;
 
     div.innerHTML = `
       <div class="adjuster-header">
@@ -210,12 +298,18 @@ function buildAdjusters() {
           <span class="chevron">▸</span>
           <span class="title">Photo ${i + 1}</span>
         </button>
-        <label class="position-select-label">
-          Position
-          <select class="position-select" data-index="${i}">
-            ${positionOptions}
-          </select>
-        </label>
+        <div class="adjuster-controls">
+          <div class="reorder-buttons">
+            <button type="button" class="reorder-btn" data-index="${i}" data-dir="up" ${isFirst ? "disabled" : ""} title="Monter" aria-label="Monter d'une position">▲</button>
+            <button type="button" class="reorder-btn" data-index="${i}" data-dir="down" ${isLast ? "disabled" : ""} title="Descendre" aria-label="Descendre d'une position">▼</button>
+          </div>
+          <label class="position-select-label">
+            Position
+            <select class="position-select" data-index="${i}">
+              ${positionOptions}
+            </select>
+          </label>
+        </div>
       </div>
       <div class="adjuster-body">
         <div class="slider-row">
@@ -289,15 +383,33 @@ function buildAdjusters() {
     });
   });
 
-  // Panneaux rétractables : replier/déplier sans tout reconstruire
+  // Panneaux rétractables (façon accordéon : un seul ouvert à la fois)
   photoAdjusters.querySelectorAll(".adjuster-toggle").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       const index = parseInt(btn.dataset.index, 10);
-      const collapsed = !transforms[index].collapsed;
-      transforms[index].collapsed = collapsed;
-      const card = btn.closest(".photo-adjuster");
-      card.classList.toggle("is-collapsed", collapsed);
-      btn.setAttribute("aria-expanded", (!collapsed).toString());
+      const wasCollapsed = transforms[index].collapsed;
+      if (wasCollapsed) {
+        expandPhotoPanel(index);
+      } else {
+        // Déjà ouvert : on referme simplement ce panneau
+        transforms[index].collapsed = true;
+        const card = btn.closest(".photo-adjuster");
+        card.classList.add("is-collapsed");
+        btn.setAttribute("aria-expanded", "false");
+      }
+    });
+  });
+
+  // Monter / descendre d'une position
+  photoAdjusters.querySelectorAll(".reorder-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      const index = parseInt(btn.dataset.index, 10);
+      const dir = btn.dataset.dir;
+      const toIndex = dir === "up" ? index - 1 : index + 1;
+      if (toIndex < 0 || toIndex >= images.length) return;
+      movePhotoToPosition(index, toIndex);
+      renderCollage();
+      buildAdjusters();
     });
   });
 
@@ -346,7 +458,7 @@ async function generateCollage() {
     cropZoom: 100,    // 100 = cadrage automatique (cover), jusqu'à 300 = zoom x3
     cropOffsetX: 0,   // -100 (gauche) à 100 (droite)
     cropOffsetY: 0,   // -100 (haut) à 100 (bas)
-    collapsed: false, // état replié/déplié du panneau de réglages
+    collapsed: true,  // état replié/déplié du panneau de réglages (accordéon : replié par défaut)
   }));
 
   renderCollage();
@@ -455,8 +567,10 @@ resetBtn.addEventListener("click", () => {
   photoInput.value = "";
   images = [];
   transforms = [];
+  photoHitboxes = [];
   canvas.style.display = "none";
   placeholder.style.display = "block";
+  previewHint.style.display = "none";
   positionControls.style.display = "none";
   photoAdjusters.innerHTML = "";
   generateBtn.disabled = true;
@@ -467,35 +581,40 @@ resetBtn.addEventListener("click", () => {
   bgColorInput.value = "#f5f0e8";
 });
 
+// Repli/dépli du panneau global "Ajuster chaque polaroid"
+positionControlsToggle.addEventListener("click", () => {
+  const collapsed = positionControls.classList.toggle("is-collapsed");
+  positionControlsToggle.setAttribute("aria-expanded", (!collapsed).toString());
+});
+
 // ---------- Embed / HTML code ----------
-embedBtn.addEventListener("click", () => {
-  if (!canvas.width) return;
+function buildEmbedHtml(imagePath, width, height) {
+  const hasSize = Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0;
+  const w = hasSize ? Math.round(width) : null;
+  const h = hasSize ? Math.round(height) : null;
+  const maxWidthValue = hasSize ? `${w}px` : "640px";
+  const aspectRatioLine = hasSize ? `\n  aspect-ratio: ${(w / h).toFixed(4)};` : "";
+  const imgSizeAttrs = hasSize ? `\n    width="${w}"\n    height="${h}"` : "";
+  const imgHeightStyle = hasSize ? "100%" : "auto";
+  const note = hasSize
+    ? "Responsive : occupe le plus de place possible sans jamais dépasser la résolution naturelle de l'image (évite le flou d'agrandissement)."
+    : "Responsive : occupe le plus de place possible. Renseignez la largeur/hauteur réelles de l'image pour éviter tout flou d'agrandissement.";
 
-  // Largeur naturelle du collage (en CSS px) : sert de plafond pour éviter
-  // un agrandissement flou de l'image sur les grands écrans.
-  const naturalWidth = Math.round(lastCollageSize.width) || 640;
-  const naturalHeight = Math.round(lastCollageSize.height) || 640;
-  const ratio = (naturalWidth / naturalHeight).toFixed(4);
-
-  const html = `<!-- Polaroid Postcard – by twagirumukiza -->
-<!-- Responsive : occupe le plus de place possible sans jamais dépasser
-     la résolution naturelle de l'image (évite le flou d'agrandissement). -->
+  return `<!-- Polaroid Postcard – by twagirumukiza -->
+<!-- ${note} -->
 <figure class="polaroid-postcard" style="
   width: 100%;
-  max-width: min(92vw, ${naturalWidth}px);
-  aspect-ratio: ${ratio};
+  max-width: min(92vw, ${maxWidthValue});${aspectRatioLine}
   margin: 2rem auto;
   text-align: center;
   font-family: system-ui, sans-serif;
 ">
   <img
-    src="VOTRE-IMAGE.png"
-    alt="Collage polaroid"
-    width="${naturalWidth}"
-    height="${naturalHeight}"
+    src="${imagePath || "VOTRE-IMAGE.png"}"
+    alt="Collage polaroid"${imgSizeAttrs}
     style="
       width: 100%;
-      height: 100%;
+      height: ${imgHeightStyle};
       display: block;
       object-fit: contain;
       border-radius: 4px;
@@ -510,9 +629,39 @@ embedBtn.addEventListener("click", () => {
     <!-- Optionnel : légende -->
   </figcaption>
 </figure>`;
+}
 
-  embedCode.value = html;
+// Bouton "Code HTML" : à partir du collage qui vient d'être généré
+embedBtn.addEventListener("click", () => {
+  if (!canvas.width) return;
+
+  embedManualFields.style.display = "none";
+  embedGeneratedHint.textContent = "Copiez ce code et collez-le dans votre site. Remplacez VOTRE-IMAGE.png par le chemin de votre fichier téléchargé.";
+
+  const naturalWidth = Math.round(lastCollageSize.width) || 640;
+  const naturalHeight = Math.round(lastCollageSize.height) || 640;
+  embedCode.value = buildEmbedHtml("VOTRE-IMAGE.png", naturalWidth, naturalHeight);
   embedModal.style.display = "flex";
+});
+
+// Bouton "Code HTML (sans générer)" : à partir d'un chemin d'image saisi manuellement
+function regenerateManualEmbedCode() {
+  const path = embedImagePath.value.trim();
+  const w = parseFloat(embedImgWidth.value);
+  const h = parseFloat(embedImgHeight.value);
+  embedCode.value = buildEmbedHtml(path || "VOTRE-IMAGE.png", w, h);
+}
+
+embedManualBtn.addEventListener("click", () => {
+  embedManualFields.style.display = "block";
+  embedGeneratedHint.textContent = "Le code se met à jour automatiquement au fur et à mesure que vous complétez les champs ci-dessus.";
+  regenerateManualEmbedCode();
+  embedModal.style.display = "flex";
+  embedImagePath.focus();
+});
+
+[embedImagePath, embedImgWidth, embedImgHeight].forEach((input) => {
+  input.addEventListener("input", regenerateManualEmbedCode);
 });
 
 closeModal.addEventListener("click", () => {

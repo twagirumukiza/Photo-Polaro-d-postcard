@@ -202,6 +202,11 @@ input[type="color"] {
   overflow: auto;
 }
 
+#previewWrapper {
+  width: 100%;
+  text-align: center;
+}
+
 .placeholder {
   text-align: center;
   color: var(--muted);
@@ -217,6 +222,11 @@ input[type="color"] {
   height: auto;
   border-radius: 4px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+}
+
+#previewHint {
+  margin-top: 0.6rem;
 }
 
 footer {
@@ -256,11 +266,38 @@ footer {
   border-top: 1px solid var(--border);
 }
 
-.position-controls h3 {
+.position-controls-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: none;
+  border: none;
+  padding: 0;
+  margin-bottom: 1rem;
+  cursor: pointer;
+  font-family: inherit;
+  width: 100%;
+}
+
+.position-controls-toggle .chevron {
+  font-size: 0.7rem;
+  color: var(--muted);
+  transition: transform 0.15s ease;
+}
+
+.position-controls-toggle[aria-expanded="true"] .chevron {
+  transform: rotate(90deg);
+}
+
+.position-controls-toggle h3 {
   font-size: 0.95rem;
   font-weight: 600;
-  margin-bottom: 1rem;
+  margin: 0;
   color: var(--text);
+}
+
+.position-controls.is-collapsed #photoAdjusters {
+  display: none;
 }
 
 .photo-adjuster {
@@ -328,6 +365,42 @@ footer {
   font-size: 0.78rem;
   background: #fff;
   cursor: pointer;
+}
+
+.reorder-buttons {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.reorder-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text);
+  font-size: 0.75rem;
+  cursor: pointer;
+  padding: 0;
+}
+
+.reorder-btn:hover:not(:disabled) {
+  background: #eef2f5;
+}
+
+.reorder-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.adjuster-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
 }
 
 .adjuster-body {
@@ -455,4 +528,24 @@ footer {
   padding: 0.1rem 0.3rem;
   border-radius: 4px;
   font-size: 0.8rem;
+}
+
+.embed-manual-fields {
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px dashed var(--border);
+}
+
+.embed-manual-fields .control-group {
+  margin-bottom: 0.75rem;
+}
+
+.embed-manual-fields input[type="text"],
+.embed-manual-fields input[type="number"] {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  background: #fff;
 }

@@ -61,6 +61,7 @@
           <button id="generateBtn" class="btn primary" disabled>Générer le collage</button>
           <button id="downloadBtn" class="btn secondary" disabled>Télécharger PNG</button>
           <button id="embedBtn" class="btn secondary" disabled>Code HTML</button>
+          <button id="embedManualBtn" class="btn secondary">Code HTML (sans générer)</button>
           <button id="resetBtn" class="btn ghost">Réinitialiser</button>
         </div>
 
@@ -71,7 +72,27 @@
               <h3>Code d’intégration HTML</h3>
               <button id="closeModal" class="close-btn">&times;</button>
             </div>
-            <p class="hint">Copiez ce code et collez-le dans votre site. Remplacez <code>VOTRE-IMAGE.png</code> par le chemin de votre fichier téléchargé.</p>
+
+            <div id="embedManualFields" class="embed-manual-fields" style="display:none;">
+              <p class="hint">Renseignez le chemin de votre image (et si possible ses dimensions) pour générer le code sans avoir à créer de collage ici.</p>
+              <div class="control-group">
+                <label for="embedImagePath">Chemin de l’image</label>
+                <input type="text" id="embedImagePath" placeholder="ex : images/mon-collage.png" />
+              </div>
+              <div class="control-row">
+                <div class="control-group">
+                  <label for="embedImgWidth">Largeur (px)</label>
+                  <input type="number" id="embedImgWidth" min="1" placeholder="ex : 640" />
+                </div>
+                <div class="control-group">
+                  <label for="embedImgHeight">Hauteur (px)</label>
+                  <input type="number" id="embedImgHeight" min="1" placeholder="ex : 800" />
+                </div>
+              </div>
+              <p class="hint">Dimensions optionnelles : elles évitent le flou d’agrandissement et les sauts de mise en page, mais le code reste responsive sans elles.</p>
+            </div>
+
+            <p class="hint" id="embedGeneratedHint">Copiez ce code et collez-le dans votre site.</p>
             <textarea id="embedCode" readonly rows="12"></textarea>
             <button id="copyEmbedBtn" class="btn primary">Copier le code</button>
           </div>
@@ -79,17 +100,23 @@
 
         <!-- Contrôles de position par photo (apparaît après génération) -->
         <div id="positionControls" class="position-controls" style="display:none;">
-          <h3>Ajuster chaque polaroid</h3>
+          <button type="button" id="positionControlsToggle" class="position-controls-toggle" aria-expanded="true">
+            <span class="chevron">▸</span>
+            <h3>Ajuster chaque polaroid</h3>
+          </button>
           <div id="photoAdjusters"></div>
         </div>
       </section>
 
       <section class="preview-area">
-        <div id="previewPlaceholder" class="placeholder">
-          <p>Vos polaroids apparaîtront ici</p>
-          <p class="small">Uploadez des photos puis cliquez sur « Générer »</p>
+        <div id="previewWrapper">
+          <div id="previewPlaceholder" class="placeholder">
+            <p>Vos polaroids apparaîtront ici</p>
+            <p class="small">Uploadez des photos puis cliquez sur « Générer »</p>
+          </div>
+          <canvas id="resultCanvas" style="display:none;"></canvas>
+          <p id="previewHint" class="hint" style="display:none;">Astuce : cliquez sur un polaroid pour ouvrir ses réglages.</p>
         </div>
-        <canvas id="resultCanvas" style="display:none;"></canvas>
       </section>
     </main>
 
