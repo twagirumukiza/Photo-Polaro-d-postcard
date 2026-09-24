@@ -633,6 +633,12 @@ function buildLightboxAssets(namespace) {
   .pp-lightbox[data-pp-lightbox="${namespace}"] .pp-lightbox-close:hover { background: rgba(255, 255, 255, 0.3); }
   body.pp-lightbox-open-${namespace} { overflow: hidden; }`,
     js: `    var lightbox = document.querySelector('[data-pp-lightbox="${namespace}"]');
+    // On rattache le popup directement à <body> : ça l'immunise contre un
+    // parent avec "transform" ou "overflow:hidden" ailleurs sur la page,
+    // qui casserait sinon son positionnement plein écran ("fixed").
+    if (lightbox && lightbox.parentNode !== document.body) {
+      document.body.appendChild(lightbox);
+    }
     var lightboxImg = lightbox ? lightbox.querySelector("img") : null;
     var lightboxClose = lightbox ? lightbox.querySelector(".pp-lightbox-close") : null;
     var savedScrollY = 0;
