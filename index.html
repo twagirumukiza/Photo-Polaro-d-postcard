@@ -74,22 +74,43 @@
             </div>
 
             <div id="embedManualFields" class="embed-manual-fields" style="display:none;">
-              <p class="hint">Renseignez le chemin de votre image (et si possible ses dimensions) pour générer le code sans avoir à créer de collage ici.</p>
-              <div class="control-group">
-                <label for="embedImagePath">Chemin de l’image</label>
-                <input type="text" id="embedImagePath" placeholder="ex : images/mon-collage.png" />
-              </div>
+              <p class="hint">
+                Utilisez des photos déjà présentes sur votre site : indiquez leur lien (URL ou chemin relatif), le code HTML/CSS/JS généré ci-dessous ira les chercher et les mettra en scène en polaroids directement dans la page, sans passer par une image générée ici.
+              </p>
+
               <div class="control-row">
                 <div class="control-group">
-                  <label for="embedImgWidth">Largeur (px)</label>
-                  <input type="number" id="embedImgWidth" min="1" placeholder="ex : 640" />
+                  <label for="embedManualCount">Nombre de photos</label>
+                  <select id="embedManualCount">
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3" selected>3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                    <option value="6">6</option>
+                  </select>
                 </div>
                 <div class="control-group">
-                  <label for="embedImgHeight">Hauteur (px)</label>
-                  <input type="number" id="embedImgHeight" min="1" placeholder="ex : 800" />
+                  <label>Orientation</label>
+                  <div class="radio-group">
+                    <label class="radio">
+                      <input type="radio" name="embedManualOrientation" value="vertical" checked />
+                      Verticale
+                    </label>
+                    <label class="radio">
+                      <input type="radio" name="embedManualOrientation" value="horizontal" />
+                      Horizontale
+                    </label>
+                  </div>
                 </div>
               </div>
-              <p class="hint">Dimensions optionnelles : elles évitent le flou d’agrandissement et les sauts de mise en page, mais le code reste responsive sans elles.</p>
+
+              <div class="control-group">
+                <label for="embedManualBg">Couleur de fond</label>
+                <input type="color" id="embedManualBg" value="#f5f0e8" />
+              </div>
+
+              <div id="embedManualUrlFields" class="embed-manual-url-fields"></div>
             </div>
 
             <p class="hint" id="embedGeneratedHint">Copiez ce code et collez-le dans votre site.</p>

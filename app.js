@@ -19,9 +19,9 @@ const photoAdjusters = document.getElementById("photoAdjusters");
 const embedBtn = document.getElementById("embedBtn");
 const embedManualBtn = document.getElementById("embedManualBtn");
 const embedManualFields = document.getElementById("embedManualFields");
-const embedImagePath = document.getElementById("embedImagePath");
-const embedImgWidth = document.getElementById("embedImgWidth");
-const embedImgHeight = document.getElementById("embedImgHeight");
+const embedManualCount = document.getElementById("embedManualCount");
+const embedManualBg = document.getElementById("embedManualBg");
+const embedManualUrlFields = document.getElementById("embedManualUrlFields");
 const embedGeneratedHint = document.getElementById("embedGeneratedHint");
 const embedModal = document.getElementById("embedModal");
 const embedCode = document.getElementById("embedCode");
@@ -644,25 +644,152 @@ embedBtn.addEventListener("click", () => {
   embedModal.style.display = "flex";
 });
 
-// Bouton "Code HTML (sans générer)" : à partir d'un chemin d'image saisi manuellement
+// ---------- Bouton "Code HTML (sans générer)" ----------
+// Génère un bloc HTML + CSS + JS autonome qui va chercher des photos déjà en
+// ligne (par leur URL/chemin) et les met en scène en polaroids empilés
+// directement dans le navigateur — aucune image n'est créée ici.
+
+let manualUrlValues = ["", "", ""]; // conserve la saisie quand on change le nombre de photos
+
+function escapeAttr(str) {
+  return String(str).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+}
+
+const MANUAL_ROTATIONS = [-5, 4, -6, 5, -4, 6];
+
+function buildStandaloneEmbedHtml({ urls, orientation, bgColor }) {
+  const isHorizontal = orientation === "horizontal";
+  const items = urls.map((url, i) => {
+    const src = escapeAttr((url && url.trim()) || `CHEMIN-PHOTO-${i + 1}.jpg`);
+    const rot = MANUAL_ROTATIONS[i % MANUAL_ROTATIONS.length];
+    return `    <div class="polaroid-item">
+      <div class="polaroid-frame" data-rotate="${rot}" style="transform: rotate(${rot}deg);">
+        <img src="${src}" alt="Photo ${i + 1}" loading="lazy" />
+      </div>
+    </div>`;
+  }).join("\n");
+
+  return `<!-- Polaroid Postcard (autonome) – by twagirumukiza -->
+<!-- Va chercher vos photos par leur URL/chemin et les met en scène en
+     polaroids empilés, directement dans la page (aucune image pré-générée
+     n'est nécessaire). Remplacez les CHEMIN-PHOTO-N.jpg par vos liens. -->
+<style>
+  .polaroid-stack {
+    --bg: ${bgColor};
+    box-sizing: border-box;
+    width: 100%;
+    max-width: min(92vw, ${isHorizontal ? "900px" : "420px"});
+    margin: 2rem auto;
+    padding: 2rem 1.25rem;
+    background: var(--bg);
+    border-radius: 12px;
+    ${isHorizontal ? "display: flex;\n    align-items: center;\n    justify-content: center;\n    flex-wrap: nowrap;\n    overflow-x: auto;" : ""}
+  }
+  .polaroid-stack .polaroid-item {
+    position: relative;
+    ${isHorizontal
+      ? "flex: 0 0 auto;\n    width: 42%;\n    margin-right: -9%;"
+      : "width: 68%;\n    margin: 0 auto -14% auto;"}
+  }
+  .polaroid-stack .polaroid-item:last-child {
+    margin-right: 0;
+    margin-bottom: 0;
+  }
+  .polaroid-stack .polaroid-frame {
+    background: #fff;
+    padding: 6% 6% 18% 6%;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+    border-radius: 2px;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+  }
+  .polaroid-stack .polaroid-frame.is-front {
+    z-index: 100;
+    transform: scale(1.05) !important;
+  }
+  .polaroid-stack .polaroid-frame img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    border-radius: 1px;
+  }
+</style>
+
+<div class="polaroid-stack${isHorizontal ? " horizontal" : ""}" data-polaroid-embed>
+${items}
+</div>
+
+<script>
+  (function () {
+    var frames = document.querySelectorAll('[data-polaroid-embed] .polaroid-frame');
+    frames.forEach(function (frame) {
+      // Légère variation aléatoire à chaque chargement, pour un effet "pile de vraies photos"
+      var base = parseFloat(frame.dataset.rotate || "0");
+      var jitter = (Math.random() - 0.5) * 4;
+      frame.style.transform = "rotate(" + (base + jitter).toFixed(1) + "deg)";
+
+      // Clic sur une photo : la fait passer au premier plan
+      frame.addEventListener("click", function () {
+        frames.forEach(function (f) { f.classList.remove("is-front"); });
+        frame.classList.add("is-front");
+      });
+    });
+  })();
+</script>`;
+}
+
+function renderManualUrlInputs() {
+  const count = parseInt(embedManualCount.value, 10);
+
+  // Conserver les valeurs déjà saisies si on change le nombre de photos
+  while (manualUrlValues.length < count) manualUrlValues.push("");
+  manualUrlValues = manualUrlValues.slice(0, count);
+
+  embedManualUrlFields.innerHTML = manualUrlValues
+    .map((val, i) => `
+      <div class="control-group">
+        <label for="embedManualUrl${i}">Photo ${i + 1} — URL ou chemin</label>
+        <input type="text" id="embedManualUrl${i}" class="embed-manual-url" data-index="${i}"
+               placeholder="ex : images/photo${i + 1}.jpg" value="${escapeAttr(val)}" />
+      </div>`)
+    .join("");
+
+  embedManualUrlFields.querySelectorAll(".embed-manual-url").forEach((input) => {
+    input.addEventListener("input", (e) => {
+      manualUrlValues[parseInt(e.target.dataset.index, 10)] = e.target.value;
+      regenerateManualEmbedCode();
+    });
+  });
+}
+
 function regenerateManualEmbedCode() {
-  const path = embedImagePath.value.trim();
-  const w = parseFloat(embedImgWidth.value);
-  const h = parseFloat(embedImgHeight.value);
-  embedCode.value = buildEmbedHtml(path || "VOTRE-IMAGE.png", w, h);
+  const orientation = document.querySelector('input[name="embedManualOrientation"]:checked').value;
+  embedCode.value = buildStandaloneEmbedHtml({
+    urls: manualUrlValues,
+    orientation,
+    bgColor: embedManualBg.value,
+  });
 }
 
 embedManualBtn.addEventListener("click", () => {
   embedManualFields.style.display = "block";
   embedGeneratedHint.textContent = "Le code se met à jour automatiquement au fur et à mesure que vous complétez les champs ci-dessus.";
+  renderManualUrlInputs();
   regenerateManualEmbedCode();
   embedModal.style.display = "flex";
-  embedImagePath.focus();
 });
 
-[embedImagePath, embedImgWidth, embedImgHeight].forEach((input) => {
-  input.addEventListener("input", regenerateManualEmbedCode);
+embedManualCount.addEventListener("change", () => {
+  renderManualUrlInputs();
+  regenerateManualEmbedCode();
 });
+
+document.querySelectorAll('input[name="embedManualOrientation"]').forEach((radio) => {
+  radio.addEventListener("change", regenerateManualEmbedCode);
+});
+
+embedManualBg.addEventListener("input", regenerateManualEmbedCode);
 
 closeModal.addEventListener("click", () => {
   embedModal.style.display = "none";

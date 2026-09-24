@@ -549,3 +549,11 @@ footer {
   font-size: 0.85rem;
   background: #fff;
 }
+
+.embed-manual-url-fields {
+  margin-top: 0.5rem;
+}
+
+.embed-manual-url-fields .control-group label {
+  font-size: 0.78rem;
+}
